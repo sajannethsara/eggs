@@ -1,0 +1,27 @@
+{
+  "name": "eggs",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AK Enterprises Operations System: one shared core, five role-specific apps",
+  "packageManager": "pnpm@10.7.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "db:reset": "docker compose -f infra/docker-compose.yml down -v && pnpm db:up",
+    "dev": "pnpm --filter shared build && pnpm -r --parallel dev",
+    "dev:api": "pnpm --filter shared build && pnpm --filter api dev",
+    "dev:web": "pnpm --filter shared build && pnpm --filter web dev",
+    "build": "pnpm --filter shared build && pnpm -r --filter !shared build",
+    "setup": "pnpm install && pnpm db:up && pnpm --filter shared build && pnpm --filter api prisma:generate && pnpm --filter api exec prisma migrate dev --name init && pnpm seed",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "prisma": "pnpm --filter api exec prisma",
+    "seed": "pnpm --filter api seed"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

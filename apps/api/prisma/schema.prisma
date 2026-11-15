@@ -1,0 +1,487 @@
+// AK Enterprises core schema. Six data units (spec §4) plus users, batches, rules and audit.
+// Totals are never stored: stock, balances, driver cash and profit are derived from Movement.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  OWNER
+  OFFICE
+  CASHIER
+  DRIVER
+  WAREHOUSE
+}
+
+enum Language {
+  en
+  si
+}
+
+enum PartyType {
+  CUSTOMER
+  SUPPLIER
+  EMPLOYEE
+  OUTLET
+  WAREHOUSE
+  VEHICLE
+  SYSTEM
+}
+
+enum Segment {
+  B2C_WALKIN
+  B2B_REGULAR
+  B2B_BIG
+}
+
+enum ContactTier {
+  OWNER_ONLY
+  CAN_DELEGATE
+  STAFF
+}
+
+enum PartyStatus {
+  ACTIVE
+  PAUSED
+  BLOCKED
+}
+
+enum RateDirection {
+  BUY
+  SELL
+}
+
+enum NoteChannel {
+  CALL
+  WHATSAPP
+  VISIT
+  COMPLAINT
+  PHOTO
+  SIGNATURE
+  SYSTEM
+}
+
+enum RequestType {
+  SALE_ORDER
+  PURCHASE
+  TRANSFER
+  RETURN
+  SPOILAGE
+  PRICE_CHANGE
+  CREDIT_LIMIT_CHANGE
+  CALL_TASK
+  COLLECTION
+  LEAVE
+  SHIFT
+  CASH_HANDOVER
+  STOCK_ADJUSTMENT
+}
+
+enum RequestStatus {
+  PROPOSED
+  APPROVED
+  IN_PROGRESS
+  DONE
+  REJECTED
+}
+
+enum StopStatus {
+  PENDING
+  DONE
+  SKIPPED
+  PROBLEM
+}
+
+enum StopProblem {
+  NOT_THERE
+  REFUSED
+  CANT_REACH
+  BREAKDOWN
+}
+
+enum MovementKind {
+  GOODS
+  MONEY
+}
+
+enum PaymentMethod {
+  CASH
+  CHEQUE
+  CREDIT
+  BANK_TRANSFER
+}
+
+enum ChequeStatus {
+  PENDING
+  DEPOSITED
+  CLEARED
+  BOUNCED
+}
+
+enum SpoilageReason {
+  CRACKED
+  ROTTEN
+  EXPIRED
+  PESTS
+  DAMAGED
+}
+
+enum RequestAction {
+  CREATED
+  APPROVED
+  EDITED
+  REJECTED
+  STARTED
+  COMPLETED
+  SENT_TO_OWNER
+  REASSIGNED
+}
+
+/// A login. Every user is also an EMPLOYEE Party, so they can hold goods and money (driver cash).
+model User {
+  id                     String   @id @default(cuid())
+  username               String   @unique
+  displayName            String
+  role                   Role
+  /// bcrypt hash of a password (owner, office) or 4–6 digit PIN (cashier, driver, warehouse).
+  secretHash             String
+  language               Language @default(en)
+  active                 Boolean  @default(true)
+  canSuperviseDeliveries Boolean  @default(false)
+  party                  Party    @relation("UserParty", fields: [partyId], references: [id])
+  partyId                String   @unique
+  /// Outlet or warehouse this user works at, if any.
+  outlet                 Party?   @relation("UserOutlet", fields: [outletId], references: [id])
+  outletId               String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  notes            Note[]
+  createdRequests  Request[]      @relation("RequestCreatedBy")
+  assignedRequests Request[]      @relation("RequestAssignedTo")
+  approvedRequests Request[]      @relation("RequestApprovedBy")
+  movements        Movement[]
+  enteredRates     Rate[]         @relation("RateEnteredBy")
+  approvedRates    Rate[]         @relation("RateApprovedBy")
+  requestEvents    RequestEvent[]
+}
+
+/// Anyone or anything that can hold goods or money, or do work (spec §4).
+model Party {
+  id          String      @id @default(cuid())
+  type        PartyType
+  name        String
+  phone       String?
+  whatsapp    String?
+  address     String?
+  landmark    String?
+  segment     Segment?
+  contactTier ContactTier @default(STAFF)
+  status      PartyStatus @default(ACTIVE)
+
+  // Credit terms (customers)
+  creditLimitCents Int     @default(0)
+  creditDays       Int     @default(0)
+  creditHold       Boolean @default(false)
+
+  // Usual order and delivery (customers and suppliers)
+  /// [{ itemId, quantity }]
+  usualOrder    Json?
+  /// Weekday numbers, 0 = Sunday.
+  usualDays     Int[]    @default([])
+  windowStart   String?
+  windowEnd     String?
+  routeName     String?
+  routePosition Int?
+
+  /// Code for SYSTEM parties: LOSS, BANK, CASH_OFFICE.
+  systemCode String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User?          @relation("UserParty")
+  staffAtOutlet User[]         @relation("UserOutlet")
+  rates         Rate[]
+  notes         Note[]
+  requestsFrom  Request[]      @relation("RequestFrom")
+  requestsTo    Request[]      @relation("RequestTo")
+  movementsFrom Movement[]     @relation("MovementFrom")
+  movementsTo   Movement[]     @relation("MovementTo")
+  reorderLevels ReorderLevel[]
+  batches       Batch[]
+
+  @@index([type, status])
+  @@index([name])
+}
+
+/// A product that is sold. Quantities everywhere are in `unit` (eggs: pieces).
+model Item {
+  id         String  @id @default(cuid())
+  name       String
+  unit       String  @default("piece")
+  packSize   Int     @default(1)
+  packName   String?
+  category   String  @default("general")
+  /// Days before the item should be sold (eggs: 2).
+  holdingDays Int    @default(30)
+  perishable Boolean @default(false)
+  barcode    String? @unique
+  /// POS tile colour token: yellow, brown, green, amber, blue, grey.
+  color      String  @default("grey")
+  /// Position on the POS first row; null = found by search only.
+  posOrder   Int?
+  active     Boolean @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  rates         Rate[]
+  notes         Note[]
+  requestLines  RequestLine[]
+  movements     Movement[]
+  reorderLevels ReorderLevel[]
+  batches       Batch[]
+}
+
+model ReorderLevel {
+  id       String @id @default(cuid())
+  item     Item   @relation(fields: [itemId], references: [id])
+  itemId   String
+  holder   Party  @relation(fields: [holderId], references: [id])
+  holderId String
+  quantity Int
+
+  @@unique([itemId, holderId])
+}
+
+/// A price for an item, valid from a date. A change adds a row; old rows are history.
+model Rate {
+  id         String        @id @default(cuid())
+  item       Item          @relation(fields: [itemId], references: [id])
+  itemId     String
+  /// Blank = standard price. Set = price agreed with this customer or supplier.
+  party      Party?        @relation(fields: [partyId], references: [id])
+  partyId    String?
+  direction  RateDirection
+  priceCents Int
+  validFrom  DateTime
+  sourceNote String?
+  enteredBy  User?         @relation("RateEnteredBy", fields: [enteredById], references: [id])
+  enteredById String?
+  approvedBy User?         @relation("RateApprovedBy", fields: [approvedById], references: [id])
+  approvedById String?
+  createdAt  DateTime      @default(now())
+
+  @@index([itemId, direction, validFrom])
+  @@index([partyId])
+}
+
+/// What someone heard or saw.
+model Note {
+  id            String      @id @default(cuid())
+  party         Party?      @relation(fields: [partyId], references: [id])
+  partyId       String?
+  item          Item?       @relation(fields: [itemId], references: [id])
+  itemId        String?
+  channel       NoteChannel
+  text          String
+  attachmentUrl String?
+  createdBy     User        @relation(fields: [createdById], references: [id])
+  createdById   String
+  createdAt     DateTime    @default(now())
+
+  requests Request[]
+
+  @@index([partyId, createdAt])
+}
+
+/// Something that should happen. Rules may only create PROPOSED; a person approves.
+model Request {
+  id     String        @id @default(cuid())
+  type   RequestType
+  status RequestStatus @default(PROPOSED)
+
+  fromParty   Party?  @relation("RequestFrom", fields: [fromPartyId], references: [id])
+  fromPartyId String?
+  toParty     Party?  @relation("RequestTo", fields: [toPartyId], references: [id])
+  toPartyId   String?
+
+  dueAt       DateTime?
+  windowStart String?
+  windowEnd   String?
+
+  assignedTo   User?   @relation("RequestAssignedTo", fields: [assignedToId], references: [id])
+  assignedToId String?
+
+  createdBy   User?   @relation("RequestCreatedBy", fields: [createdById], references: [id])
+  createdById String?
+  /// Rule code when a rule created it (createdBy is null then).
+  createdByRule String?
+  /// The reason in plain words ("Outlet 3 eggs will run out tomorrow at the usual rate of sale").
+  reason String?
+
+  approvedBy   User?     @relation("RequestApprovedBy", fields: [approvedById], references: [id])
+  approvedById String?
+  approvedAt   DateTime?
+  rejectReason String?
+  decisionNote String?
+  /// True when staff pushed it to the owner because it exceeded their limit.
+  escalated Boolean @default(false)
+
+  /// Delivery stop fields (SALE_ORDER / PURCHASE on a driver's route).
+  routePosition Int?
+  stopStatus    StopStatus?
+  stopProblem   StopProblem?
+  stopNote      String?
+  arrivedAt     DateTime?
+  completedAt   DateTime?
+
+  /// Type-specific extras: price change {itemId, direction, priceCents}, leave {from, to, coverId}, handover {expectedCents, countedCents}.
+  payload Json?
+
+  note   Note?   @relation(fields: [noteId], references: [id])
+  noteId String?
+  /// Link to the original (return → sale, replacement → complaint).
+  parent   Request?  @relation("RequestParent", fields: [parentId], references: [id])
+  parentId String?
+  children Request[] @relation("RequestParent")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines     RequestLine[]
+  movements Movement[]
+  events    RequestEvent[]
+
+  @@index([status, type])
+  @@index([assignedToId, dueAt])
+  @@index([toPartyId, dueAt])
+  @@index([createdAt])
+}
+
+model RequestLine {
+  id        String  @id @default(cuid())
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId String
+  item      Item    @relation(fields: [itemId], references: [id])
+  itemId    String
+  quantity  Int
+  /// Snapshot of the rate at approval, so the price can't drift.
+  rateCents Int     @default(0)
+
+  @@index([requestId])
+}
+
+/// Audit trail: who did what to a request, when, from which device.
+model RequestEvent {
+  id        String        @id @default(cuid())
+  request   Request       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId String
+  action    RequestAction
+  by        User?         @relation(fields: [byId], references: [id])
+  byId      String?
+  note      String?
+  /// Lines before an edit, so the change is visible.
+  snapshot  Json?
+  device    String?
+  at        DateTime      @default(now())
+
+  @@index([requestId, at])
+}
+
+/// A lot of a perishable item received on a date, so freshness is tracked.
+model Batch {
+  id         String   @id @default(cuid())
+  item       Item     @relation(fields: [itemId], references: [id])
+  itemId     String
+  supplier   Party?   @relation(fields: [supplierId], references: [id])
+  supplierId String?
+  receivedAt DateTime @default(now())
+  quantity   Int
+  createdAt  DateTime @default(now())
+
+  movements Movement[]
+
+  @@index([itemId, receivedAt])
+}
+
+/// Something that did happen. Never edited: a mistake is a reversing Movement linked to the original.
+model Movement {
+  id        String       @id @default(cuid())
+  request   Request?     @relation(fields: [requestId], references: [id])
+  requestId String?
+  kind      MovementKind
+
+  fromParty   Party  @relation("MovementFrom", fields: [fromPartyId], references: [id])
+  fromPartyId String
+  toParty     Party  @relation("MovementTo", fields: [toPartyId], references: [id])
+  toPartyId   String
+
+  // GOODS
+  item     Item?   @relation(fields: [itemId], references: [id])
+  itemId   String?
+  quantity Int?
+  batch    Batch?  @relation(fields: [batchId], references: [id])
+  batchId  String?
+  /// Value of the goods at the rate used, for profit.
+  rateCents Int?
+
+  // MONEY
+  amountCents  Int?
+  method       PaymentMethod?
+  chequeNumber String?
+  chequeBank   String?
+  chequeDate   DateTime?
+  chequeStatus ChequeStatus?
+
+  // Proof
+  signerName       String?
+  signatureDataUrl String?
+  photoUrl         String?
+
+  reason         String?
+  spoilageReason SpoilageReason?
+
+  reverses   Movement?  @relation("MovementReversal", fields: [reversesId], references: [id])
+  reversesId String?    @unique
+  reversedBy Movement?  @relation("MovementReversal")
+
+  /// Client-generated id so an offline device can retry safely.
+  clientId   String   @unique
+  occurredAt DateTime @default(now())
+  by         User?    @relation(fields: [byId], references: [id])
+  byId       String?
+  device     String?
+  syncedAt   DateTime @default(now())
+
+  @@index([itemId, toPartyId])
+  @@index([itemId, fromPartyId])
+  @@index([kind, occurredAt])
+  @@index([requestId])
+  @@index([chequeStatus, chequeDate])
+}
+
+/// An automation rule. Rules only propose; the counters show whether people trust them.
+model Rule {
+  code          String  @id
+  name          String
+  description   String
+  enabled       Boolean @default(true)
+  /// Thresholds office staff can change, e.g. { freshnessPercent: 75, quietDays: 10 }.
+  settings      Json    @default("{}")
+  proposedCount Int     @default(0)
+  editedCount   Int     @default(0)
+  rejectedCount Int     @default(0)
+  lastRunAt     DateTime?
+}
+
+/// Global thresholds (spec §5): discount limit, staff approval limit, handover difference.
+model Setting {
+  key   String @id
+  value Json
+}
