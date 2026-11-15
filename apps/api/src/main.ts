@@ -14,7 +14,7 @@ async function bootstrap() {
   });
   app.useGlobalFilters(new ZodExceptionFilter());
   app.enableShutdownHooks();
-  const port = Number(process.env.PORT ?? 3000);
+  const port = Number(process.env.PORT ?? 3001);
   await app.listen(port);
   new Logger('Bootstrap').log(`API listening on http://localhost:${port}/api`);
 }

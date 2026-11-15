@@ -32,14 +32,12 @@ export function SignInPage() {
     enabled: valid,
   })
 
-  const [selected, setSelected] = React.useState<RoleUser | null>(null)
+  const [picked, setSelected] = React.useState<RoleUser | null>(null)
   const [username, setUsername] = React.useState("")
   const [secret, setSecret] = React.useState("")
   const [busy, setBusy] = React.useState(false)
-
-  React.useEffect(() => {
-    if (users.data?.length === 1) setSelected(users.data[0])
-  }, [users.data])
+  // A role with a single account skips the "who?" step.
+  const selected = picked ?? (users.data?.length === 1 ? users.data[0] : null)
 
   if (!valid) return <Navigate to="/" replace />
   if (user && user.role === role) return <Navigate to={ROLE_META[role].home} replace />

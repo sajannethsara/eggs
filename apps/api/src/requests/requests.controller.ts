@@ -66,6 +66,17 @@ export class RequestsController {
     return this.requests.assignStops(body.assignments, user);
   }
 
+  @Get('warehouse-todo')
+  warehouseTodo() {
+    return this.requests.warehouseTodo();
+  }
+
+  @Get('pending-transfers')
+  pendingTransfers(@CurrentUser() user: AuthUser, @Query('toPartyId') toPartyId?: string) {
+    const id = toPartyId || user.outletId;
+    return id ? this.requests.pendingTransfers(id) : [];
+  }
+
   @Roles('DRIVER')
   @Post('end-of-day')
   endOfDay(@CurrentUser() user: AuthUser) {

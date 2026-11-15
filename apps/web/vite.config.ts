@@ -22,9 +22,8 @@ export default defineConfig({
         orientation: "any",
         start_url: "/",
         icons: [
-          { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: "/favicon.svg", sizes: "any", type: "image/svg+xml" },
+          { src: "/favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
         ],
       },
       workbox: {
@@ -51,7 +50,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": { target: "http://localhost:3000", changeOrigin: true },
+      "/api": { target: process.env.VITE_API_PROXY ?? "http://localhost:3001", changeOrigin: true },
     },
   },
 })

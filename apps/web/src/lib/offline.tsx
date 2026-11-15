@@ -94,11 +94,12 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("online", up)
     window.addEventListener("offline", down)
     const t = setInterval(() => void flush(), 30_000)
-    void flush()
+    const first = setTimeout(() => void flush(), 0)
     return () => {
       window.removeEventListener("online", up)
       window.removeEventListener("offline", down)
       clearInterval(t)
+      clearTimeout(first)
     }
   }, [flush])
 

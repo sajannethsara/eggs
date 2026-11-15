@@ -72,8 +72,6 @@ async function main() {
     flour: await prisma.item.create({ data: { name: 'Wheat flour 1kg', unit: 'pack', packSize: 1, category: 'grocery', holdingDays: 180, color: 'grey', posOrder: 7 } }),
     milk: await prisma.item.create({ data: { name: 'Milk powder 400g', unit: 'pack', packSize: 1, category: 'grocery', holdingDays: 365, color: 'blue', posOrder: 8 } }),
   };
-  const itemList = Object.values(items);
-
   // ---- Suppliers
   const perera = await prisma.party.create({ data: { type: 'SUPPLIER', name: 'Perera Farm (eggs)', phone: '0772345671', whatsapp: '0772345671', address: 'Gampaha', contactTier: 'OWNER_ONLY', usualDays: [1, 3, 5], usualOrder: [{ itemId: items.eggs.id, quantity: 3000 }] } });
   const coconutSup = await prisma.party.create({ data: { type: 'SUPPLIER', name: 'Kurunegala Coconut Traders', phone: '0772345672', address: 'Kurunegala', contactTier: 'CAN_DELEGATE', usualDays: [2], usualOrder: [{ itemId: items.coconut.id, quantity: 600 }] } });

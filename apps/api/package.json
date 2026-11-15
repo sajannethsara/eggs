@@ -4,11 +4,10 @@
   "private": true,
   "description": "AK Enterprises core API: review gate, rules, calculated views",
   "scripts": {
-    "dev": "nest start --watch",
-    "build": "nest build",
+    "dev": "tsc-watch -p tsconfig.build.json --onSuccess \"node dist/src/main.js\"",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/src/main.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint \"src/**/*.ts\"",
     "prisma": "prisma",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -31,12 +30,11 @@
     "shared": "workspace:*"
   },
   "devDependencies": {
-    "@nestjs/cli": "^12.0.13",
-    "@nestjs/schematics": "^12.0.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.15.0",
     "@types/pg": "^8.15.0",
     "prisma": "7.10.1",
+    "tsc-watch": "^7.1.1",
     "tsx": "^4.20.0",
     "typescript": "5.9.3",
     "vitest": "^4.0.0"

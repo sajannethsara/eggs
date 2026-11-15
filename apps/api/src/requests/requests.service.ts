@@ -593,6 +593,34 @@ export class RequestsService {
     );
   }
 
+  /** Warehouse to-do (spec §12): approved purchases arriving, approved/in-progress transfers to send. */
+  async warehouseTodo() {
+    const wh = await this.prisma.party.findFirst({ where: { type: 'WAREHOUSE' } });
+    if (!wh) return { receive: [], send: [] };
+    const [receive, send] = await Promise.all([
+      this.prisma.request.findMany({
+        where: { type: 'PURCHASE', toPartyId: wh.id, status: { in: ['APPROVED', 'IN_PROGRESS'] }, assignedToId: null },
+        include: REQUEST_INCLUDE,
+        orderBy: [{ dueAt: 'asc' }],
+      }),
+      this.prisma.request.findMany({
+        where: { type: 'TRANSFER', fromPartyId: wh.id, status: { in: ['APPROVED', 'IN_PROGRESS'] } },
+        include: REQUEST_INCLUDE,
+        orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+      }),
+    ]);
+    return { receive, send };
+  }
+
+  /** Transfers on their way to a holder (an outlet confirms them on its POS, spec §10). */
+  pendingTransfers(toPartyId: string) {
+    return this.prisma.request.findMany({
+      where: { type: 'TRANSFER', toPartyId, status: { in: ['APPROVED', 'IN_PROGRESS'] } },
+      include: REQUEST_INCLUDE,
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   /** Owner approve list grouped by type (spec §8.2). */
   async ownerQueue(user: AuthUser) {
     const rows = await this.inbox(user, 'mine');

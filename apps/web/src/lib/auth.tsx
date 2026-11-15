@@ -41,10 +41,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   React.useEffect(() => {
-    if (!tokenStore.get()) {
-      setLoading(false)
-      return
-    }
+    // `loading` already starts false when there is no token.
+    if (!tokenStore.get()) return
     // Offline: keep the cached user so the POS and driver app still open.
     api
       .get<User>("/auth/me")

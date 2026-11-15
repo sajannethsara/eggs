@@ -27,10 +27,11 @@ export class AuthService {
   async usersForRole(role: Role) {
     const users = await this.prisma.user.findMany({
       where: { role, active: true },
-      select: { username: true, displayName: true, outlet: { select: { name: true } } },
+      select: { id: true, username: true, displayName: true, outlet: { select: { name: true } } },
       orderBy: { displayName: 'asc' },
     });
     return users.map((u) => ({
+      id: u.id,
       username: u.username,
       displayName: u.displayName,
       outletName: u.outlet?.name ?? null,

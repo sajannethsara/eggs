@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: eggs
       POSTGRES_DB: eggs
     ports:
-      - "5432:5432"
+      # 5433 on the host: this machine also runs a native PostgreSQL on 5432.
+      - "5433:5432"
     volumes:
       - eggs-pgdata:/var/lib/postgresql/data
     healthcheck:
